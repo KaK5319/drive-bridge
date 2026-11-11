@@ -7,6 +7,8 @@ workflows:
 
     environment:
       flutter: stable
+      android_signing:
+        - drive_bridge_keystore
 
     scripts:
       - name: Create Android project
@@ -17,6 +19,29 @@ workflows:
           echo "=== Checking Android directory ==="
           test -d android
           ls -la android
+
+      - name: Set up fixed-keystore signing
+        script: |
+          set -e
+          cat > android/key.properties <<EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
+          EOF
+          python3 - <<'PYEOF'
+          p = "android/app/build.gradle.kts"
+          s = open(p).read()
+          assert 'create("release")' in s, "template signing config not found"
+          if 'debug {' not in s:
+              s = s.replace(
+                  "buildTypes {",
+                  'buildTypes {\n        debug {\n            signingConfig = signingConfigs.getByName("release")\n        }',
+                  1,
+              )
+          open(p, "w").write(s)
+          print("debug build type now uses the release (fixed keystore) signing config")
+          PYEOF
 
       - name: Get Flutter packages
         script: |
