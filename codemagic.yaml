@@ -36,18 +36,30 @@ workflows:
           if os.path.exists(kts):
               s = open(kts).read()
               assert "buildTypes {" in s, "buildTypes block not found in build.gradle.kts"
+              imps = ""
+              if "import java.util.Properties" not in s:
+                  imps += "import java.util.Properties\n"
+              if "import java.io.FileInputStream" not in s:
+                  imps += "import java.io.FileInputStream\n"
+              if imps:
+                  s = imps + s
+              if "keystoreProperties" not in s:
+                  load_snippet = (
+                      "val keystoreProperties = Properties()\n"
+                      'val keystorePropertiesFile = rootProject.file("key.properties")\n'
+                      "if (keystorePropertiesFile.exists()) {\n"
+                      "    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n"
+                      "}\n\n"
+                  )
+                  idx = s.index("android {")
+                  s = s[:idx] + load_snippet + s[idx:]
               block = (
                   "    signingConfigs {\n"
                   '        create("release") {\n'
-                  "            val kp = java.util.Properties()\n"
-                  '            val kpf = rootProject.file("key.properties")\n'
-                  "            if (kpf.exists()) {\n"
-                  "                kp.load(java.io.FileInputStream(kpf))\n"
-                  "            }\n"
-                  '            keyAlias = kp["keyAlias"] as String\n'
-                  '            keyPassword = kp["keyPassword"] as String\n'
-                  '            storeFile = file(kp["storeFile"] as String)\n'
-                  '            storePassword = kp["storePassword"] as String\n'
+                  '            keyAlias = keystoreProperties["keyAlias"] as String\n'
+                  '            keyPassword = keystoreProperties["keyPassword"] as String\n'
+                  '            storeFile = keystoreProperties["storeFile"]?.let { file(it) }\n'
+                  '            storePassword = keystoreProperties["storePassword"] as String\n'
                   "        }\n"
                   "    }\n\n"
               )
