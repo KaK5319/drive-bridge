@@ -107,6 +107,70 @@ workflows:
               raise SystemExit("no android/app build.gradle(.kts) found")
           PYEOF
 
+      - name: Apply app patches (storage bridge and manifest permissions)
+        script: |
+          set -e
+          python3 - <<'PYEOF'
+          import os
+          # 1) MainActivity.kt を、ストレージ許可の橋渡し入りに差し替える。
+          #    ダウンロード監視には「すべてのファイルへのアクセス」許可が要る。
+          kt_dir = "android/app/src/main/kotlin/com/example/drive_bridge"
+          os.makedirs(kt_dir, exist_ok=True)
+          main_activity = '''package com.example.drive_bridge
+
+          import android.content.Intent
+          import android.net.Uri
+          import android.os.Environment
+          import android.provider.Settings
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+
+          class MainActivity : FlutterActivity() {
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "drive_bridge/storage")
+                      .setMethodCallHandler { call, result ->
+                          when (call.method) {
+                              "isAllFilesAccessGranted" ->
+                                  result.success(Environment.isExternalStorageManager())
+                              "openAllFilesAccessSettings" -> {
+                                  try {
+                                      val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                                      intent.data = Uri.parse("package:" + packageName)
+                                      startActivity(intent)
+                                  } catch (e: Exception) {
+                                      try {
+                                          startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                                      } catch (e2: Exception) {
+                                          // 開けない環境では何もしない
+                                      }
+                                  }
+                                  result.success(null)
+                              }
+                              else -> result.notImplemented()
+                          }
+                      }
+              }
+          }
+          '''
+          open(os.path.join(kt_dir, "MainActivity.kt"), "w").write(main_activity)
+          print("wrote MainActivity.kt with storage bridge")
+          # 2) AndroidManifest.xml に権限を追加する(重複は入れない)。
+          manifest = "android/app/src/main/AndroidManifest.xml"
+          s = open(manifest).read()
+          perms = ""
+          if "android.permission.INTERNET" not in s:
+              perms += '    <uses-permission android:name="android.permission.INTERNET"/>\n'
+          if "android.permission.MANAGE_EXTERNAL_STORAGE" not in s:
+              perms += '    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>\n'
+          if perms:
+              idx = s.index(">", s.index("<manifest")) + 1
+              s = s[:idx] + "\n" + perms + s[idx:]
+              open(manifest, "w").write(s)
+          print("patched AndroidManifest.xml permissions")
+          PYEOF
+
       - name: Get Flutter packages
         script: |
           flutter pub get

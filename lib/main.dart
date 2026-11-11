@@ -7,12 +7,14 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'uploader.dart';
+import 'watcher.dart';
 
 /// ドライブ移行 - スマホのダウンロードフォルダに新しく来た rar / zip を、
 /// 名前の文字化けを直しながら Google ドライブへ自動で送るアプリ。
-/// 第2歩:ログインに加えて「テスト送信」。選んだファイルを、名前の
-/// 文字化けを直してドライブへ塊に分けて送る。送信の仕組みが確認できたら、
-/// 次にダウンロード監視と組み合わせる。
+/// 第3歩:ダウンロード監視。アプリを開いている間、10秒ごとにダウンロード
+/// フォルダを確認し、新しく来て落ち着いた rar / zip を自動で送る。
+/// 監視を始めた時点で既にあったファイルは送らない。送ったものは記録して
+/// 二度送らない。
 
 // ---------- 見た目の色(映画棚・漫画棚と同系列の明るい木の色) ----------
 const Color kCream = Color(0xFFF7EFE3); // 背景の温かいクリーム色
@@ -77,7 +79,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   GoogleSignInAccount? _account;
   bool _busy = false;
   String? _errorText;
@@ -89,9 +91,27 @@ class _HomePageState extends State<HomePage> {
   String? _uploadText;
   bool _uploadError = false;
 
+  // ダウンロード監視。
+  late final WatchStore _watchStore;
+  late final DownloadWatcher _watcher;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _watchStore = WatchStore();
+    _watcher = DownloadWatcher(
+      store: _watchStore,
+      authHeaders: () async {
+        final a = _googleSignIn.currentUser ?? _account;
+        if (a == null) return null;
+        return a.authHeaders;
+      },
+      onChanged: () {
+        if (mounted) setState(() {});
+      },
+    );
+    _watcher.init();
     _googleSignIn.onCurrentUserChanged.listen((GoogleSignInAccount? account) {
       if (!mounted) return;
       setState(() {
@@ -103,6 +123,21 @@ class _HomePageState extends State<HomePage> {
       // 復元できないのは異常ではない(初回など)。エラー表示はしない。
       return null;
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _watcher.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 許可の設定画面から戻ってきたら、許可の状態を確認し直す。
+    if (state == AppLifecycleState.resumed) {
+      _watcher.refreshPermission();
+    }
   }
 
   Future<void> _signIn() async {
@@ -177,6 +212,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _signOut() async {
+    _watcher.setWatching(false);
     setState(() {
       _busy = true;
       _errorText = null;
@@ -267,6 +303,58 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
+          if (account != null) ...[
+            const SizedBox(height: 16),
+            Card(
+              color: kCard,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('ダウンロード監視', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: kInk)),
+                    const SizedBox(height: 8),
+                    if (!_watcher.permissionGranted) ...[
+                      const Text('監視には「すべてのファイルへのアクセス」の許可が必要です。', style: TextStyle(color: kInk)),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () => StorageBridge.openAllFilesAccessSettings(),
+                        child: const Text('許可を設定する'),
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          const Text('監視する', style: TextStyle(color: kInk)),
+                          const Spacer(),
+                          Switch(value: _watcher.watching, onChanged: _watcher.setWatching),
+                        ],
+                      ),
+                      if (_watcher.statusText != null)
+                        Text(_watcher.statusText!, style: const TextStyle(color: kSub)),
+                      if (_watcher.uploading) ...[
+                        const SizedBox(height: 8),
+                        LinearProgressIndicator(
+                          value: _watcher.currentTotal > 0 ? _watcher.currentSent / _watcher.currentTotal : null,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '送信中：${_watcher.currentName ?? ''}（${_mb(_watcher.currentSent)} / ${_mb(_watcher.currentTotal)} MB）',
+                          style: const TextStyle(color: kInk),
+                        ),
+                      ],
+                      if (_watchStore.sent.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        const Text('送信ずみ', style: TextStyle(fontWeight: FontWeight.bold, color: kInk)),
+                        const SizedBox(height: 4),
+                        for (final r in _watchStore.sent.reversed.take(5))
+                          Text('・${r.driveName}', style: const TextStyle(color: kInk)),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           const Card(
             color: kCard,

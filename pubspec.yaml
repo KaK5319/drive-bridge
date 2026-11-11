@@ -14,6 +14,7 @@ dependencies:
   google_sign_in: ^6.2.1
   http: ^1.2.2
   file_picker: ^8.1.2
+  path_provider: ^2.1.4
 
 # file_picker が引き込む flutter_plugin_android_lifecycle の新しい版は
 # compileSdk 36 を要求して AAR メタデータ検査でビルドが落ちる。
