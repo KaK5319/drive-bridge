@@ -37,6 +37,15 @@ class StorageBridge {
       // 開けない環境では何もしない。
     }
   }
+
+  /// Google Chrome(無ければブラウザで Google)を開く。
+  static Future<void> openChrome() async {
+    try {
+      await _channel.invokeMethod<void>('openChrome');
+    } catch (_) {
+      // 開けない環境では何もしない。
+    }
+  }
 }
 
 /// 送信ずみファイルの記録。

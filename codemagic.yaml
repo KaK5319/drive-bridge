@@ -154,6 +154,26 @@ workflows:
                                   }
                                   result.success(null)
                               }
+                              "openChrome" -> {
+                                  var opened = false
+                                  try {
+                                      val launch = packageManager.getLaunchIntentForPackage("com.android.chrome")
+                                      if (launch != null) {
+                                          startActivity(launch)
+                                          opened = true
+                                      }
+                                  } catch (e: Exception) {
+                                      // Chrome が無い等。ブラウザで Google を開く。
+                                  }
+                                  if (!opened) {
+                                      try {
+                                          startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com")))
+                                      } catch (e: Exception) {
+                                          // 開けない環境では何もしない
+                                      }
+                                  }
+                                  result.success(null)
+                              }
                               "openAllFilesAccessSettings" -> {
                                   try {
                                       val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)

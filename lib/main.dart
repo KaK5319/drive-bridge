@@ -301,6 +301,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 8),
                     OutlinedButton(
+                      onPressed: () => StorageBridge.openChrome(),
+                      child: const Text('Google Chromeを開く'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
                       onPressed: _signOut,
                       child: const Text('ログアウト'),
                     ),
