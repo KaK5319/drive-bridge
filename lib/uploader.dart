@@ -10,17 +10,46 @@ import 'package:http/http.dart' as http;
 
 const int kChunkBytes = 8 * 1024 * 1024;
 
-/// UTF-8 のバイト列が Latin-1 として誤って読まれたファイル名
-/// (例: ã_¤ã_³... のような文字化け)を元の日本語名に戻す。
+/// ドライブへ送る時の名前を整える。
+/// 1) UTF-8 のバイト列が Latin-1 として誤って読まれたファイル名
+///    (例: ã_¤ã_³... のような文字化け)を元の日本語名に戻す。
+/// 2) ローマ字タイトルで届く決まった作品名を日本語表記に直す。
 /// 直せない・対象でない名前はそのまま返す。
 String fixMojibakeName(String name) {
-  if (!name.contains('ã') && !name.contains('Ã')) return name;
-  try {
-    final bytes = latin1.encode(name);
-    final decoded = utf8.decode(bytes);
-    if (decoded != name && !decoded.contains('\uFFFD')) return decoded;
-  } catch (_) {
-    // Latin-1 で表せない文字が混ざっている等。そのまま返す。
+  var fixed = name;
+  if (name.contains('ã') || name.contains('Ã')) {
+    try {
+      final bytes = latin1.encode(name);
+      final decoded = utf8.decode(bytes);
+      if (decoded != name && !decoded.contains('\uFFFD')) fixed = decoded;
+    } catch (_) {
+      // Latin-1 で表せない文字が混ざっている等。そのまま使う。
+    }
+  }
+  return toJapaneseTitle(fixed);
+}
+
+/// ローマ字タイトルで届く決まった作品名を、日本語表記に直す。
+/// 知らないタイトルはそのまま返す(勝手な翻訳はしない)。
+String toJapaneseTitle(String name) {
+  // 週刊プレイボーイ: Weekly_Playboy_2026-09-07.rar
+  //   → 週刊プレイボーイ 2026年9月7日号.rar
+  final pb =
+      RegExp(r'^Weekly_Playboy_(\d{4})-(\d{2})-(\d{2})(\.[^.]+)$')
+          .firstMatch(name);
+  if (pb != null) {
+    final y = pb.group(1)!;
+    final m = int.parse(pb.group(2)!);
+    final d = int.parse(pb.group(3)!);
+    return '週刊プレイボーイ $y年$m月$d日号${pb.group(4)}';
+  }
+  // 回復術士のやり直し: Kaifuku_Jutsushi_no_Yarinaoshi_v18.rar
+  //   → 回復術士のやり直し v18.rar
+  final kf =
+      RegExp(r'^Kaifuku_Jutsushi_no_Yarinaoshi(_v\d+)(\.[^.]+)$')
+          .firstMatch(name);
+  if (kf != null) {
+    return '回復術士のやり直し${kf.group(1)}${kf.group(2)}';
   }
   return name;
 }
