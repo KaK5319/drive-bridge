@@ -170,8 +170,11 @@ class DownloadWatcher {
     watching = on;
     _timer?.cancel();
     if (on) {
+      statusText = '監視を開始します…';
       _timer = Timer.periodic(interval, (_) => scan());
       scan();
+    } else {
+      statusText = '停止中';
     }
     onChanged();
   }
