@@ -151,6 +151,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       setState(() {
         _account = account;
         _busy = false;
+        if (account == null) {
+          // アカウント選択の途中で戻ると null が返る。無言にせず理由を示す。
+          _errorText =
+              'ログインが完了しませんでした。アカウントを選んだ後の画面で「続行」と「許可」まで進んでください。';
+        }
       });
     } on PlatformException catch (e) {
       if (!mounted) return;
