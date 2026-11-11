@@ -46,6 +46,15 @@ class StorageBridge {
       // 開けない環境では何もしない。
     }
   }
+
+  /// ミューズ(muse.ai)を開く。アプリが入っていればアプリ側に渡る。
+  static Future<void> openMuse() async {
+    try {
+      await _channel.invokeMethod<void>('openMuse');
+    } catch (_) {
+      // 開けない環境では何もしない。
+    }
+  }
 }
 
 /// 送信ずみファイルの記録。
