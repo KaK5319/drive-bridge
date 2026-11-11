@@ -238,8 +238,10 @@ workflows:
           if perms:
               idx = s.index(">", s.index("<manifest")) + 1
               s = s[:idx] + "\n" + perms + s[idx:]
-              open(manifest, "w").write(s)
-          print("patched AndroidManifest.xml permissions")
+          # 3) ホーム画面の表示名を「ドライブ移行」にする(生成直後は drive_bridge)。
+          s = s.replace('android:label="drive_bridge"', 'android:label="ドライブ移行"')
+          open(manifest, "w").write(s)
+          print("patched AndroidManifest.xml permissions + label")
           PYEOF
 
       - name: Get Flutter packages
