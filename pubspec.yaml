@@ -15,5 +15,11 @@ dependencies:
   http: ^1.2.2
   file_picker: ^8.1.2
 
+# file_picker が引き込む flutter_plugin_android_lifecycle の新しい版は
+# compileSdk 36 を要求して AAR メタデータ検査でビルドが落ちる。
+# 映画棚で実績のある 2.0.24 に固定する(映画棚の初回ビルド修正と同じ対処)。
+dependency_overrides:
+  flutter_plugin_android_lifecycle: 2.0.24
+
 flutter:
   uses-material-design: true
