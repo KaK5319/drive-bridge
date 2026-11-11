@@ -30,17 +30,69 @@ workflows:
           storeFile=$CM_KEYSTORE_PATH
           EOF
           python3 - <<'PYEOF'
-          p = "android/app/build.gradle.kts"
-          s = open(p).read()
-          assert 'create("release")' in s, "template signing config not found"
-          if 'debug {' not in s:
-              s = s.replace(
-                  "buildTypes {",
-                  'buildTypes {\n        debug {\n            signingConfig = signingConfigs.getByName("release")\n        }',
-                  1,
+          import os
+          kts = "android/app/build.gradle.kts"
+          groovy = "android/app/build.gradle"
+          if os.path.exists(kts):
+              s = open(kts).read()
+              assert "buildTypes {" in s, "buildTypes block not found in build.gradle.kts"
+              block = (
+                  "    signingConfigs {\n"
+                  '        create("release") {\n'
+                  "            val kp = java.util.Properties()\n"
+                  '            val kpf = rootProject.file("key.properties")\n'
+                  "            if (kpf.exists()) {\n"
+                  "                kp.load(java.io.FileInputStream(kpf))\n"
+                  "            }\n"
+                  '            keyAlias = kp["keyAlias"] as String\n'
+                  '            keyPassword = kp["keyPassword"] as String\n'
+                  '            storeFile = file(kp["storeFile"] as String)\n'
+                  '            storePassword = kp["storePassword"] as String\n'
+                  "        }\n"
+                  "    }\n\n"
               )
-          open(p, "w").write(s)
-          print("debug build type now uses the release (fixed keystore) signing config")
+              if 'create("release")' not in s:
+                  s = s.replace("buildTypes {", block + "    buildTypes {", 1)
+              s = s.replace('signingConfig = signingConfigs.getByName("debug")',
+                            'signingConfig = signingConfigs.getByName("release")')
+              if "debug {" not in s:
+                  s = s.replace(
+                      "buildTypes {",
+                      'buildTypes {\n        debug {\n            signingConfig = signingConfigs.getByName("release")\n        }',
+                      1,
+                  )
+              open(kts, "w").write(s)
+              print("patched build.gradle.kts: fixed keystore signing for debug+release")
+          elif os.path.exists(groovy):
+              s = open(groovy).read()
+              assert "buildTypes {" in s, "buildTypes block not found in build.gradle"
+              block = (
+                  "    signingConfigs {\n"
+                  "        release {\n"
+                  "            def kp = new Properties()\n"
+                  '            def kpf = rootProject.file("key.properties")\n'
+                  "            if (kpf.exists()) { kpf.withInputStream { kp.load(it) } }\n"
+                  "            keyAlias kp['keyAlias']\n"
+                  "            keyPassword kp['keyPassword']\n"
+                  "            storeFile file(kp['storeFile'])\n"
+                  "            storePassword kp['storePassword']\n"
+                  "        }\n"
+                  "    }\n\n"
+              )
+              if "signingConfigs" not in s:
+                  s = s.replace("buildTypes {", block + "    buildTypes {", 1)
+              s = s.replace("signingConfig signingConfigs.debug",
+                            "signingConfig signingConfigs.release")
+              if "debug {" not in s:
+                  s = s.replace(
+                      "buildTypes {",
+                      "buildTypes {\n        debug {\n            signingConfig signingConfigs.release\n        }",
+                      1,
+                  )
+              open(groovy, "w").write(s)
+              print("patched build.gradle: fixed keystore signing for debug+release")
+          else:
+              raise SystemExit("no android/app build.gradle(.kts) found")
           PYEOF
 
       - name: Get Flutter packages
