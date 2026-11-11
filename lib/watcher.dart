@@ -28,6 +28,15 @@ class StorageBridge {
       // 設定画面が開けない環境では何もしない(画面側で再確認する)。
     }
   }
+
+  /// Google ドライブ(アプリ、無ければブラウザ)を開く。
+  static Future<void> openGoogleDrive() async {
+    try {
+      await _channel.invokeMethod<void>('openDrive');
+    } catch (_) {
+      // 開けない環境では何もしない。
+    }
+  }
 }
 
 /// 送信ずみファイルの記録。
