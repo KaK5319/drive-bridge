@@ -1,12 +1,18 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import 'uploader.dart';
+
 /// ドライブ移行 - スマホのダウンロードフォルダに新しく来た rar / zip を、
 /// 名前の文字化けを直しながら Google ドライブへ自動で送るアプリ。
-/// 第1歩:Google ログインだけを実装。ログインできることが確認できたら、
-/// 次にダウンロード監視とドライブ送信を作る。
+/// 第2歩:ログインに加えて「テスト送信」。選んだファイルを、名前の
+/// 文字化けを直してドライブへ塊に分けて送る。送信の仕組みが確認できたら、
+/// 次にダウンロード監視と組み合わせる。
 
 // ---------- 見た目の色(映画棚・漫画棚と同系列の明るい木の色) ----------
 const Color kCream = Color(0xFFF7EFE3); // 背景の温かいクリーム色
@@ -76,6 +82,13 @@ class _HomePageState extends State<HomePage> {
   bool _busy = false;
   String? _errorText;
 
+  // テスト送信の状態。
+  bool _uploading = false;
+  int _sentBytes = 0;
+  int _totalBytes = 0;
+  String? _uploadText;
+  bool _uploadError = false;
+
   @override
   void initState() {
     super.initState();
@@ -116,6 +129,50 @@ class _HomePageState extends State<HomePage> {
         _busy = false;
         _errorText = 'ログインできませんでした：$e';
       });
+    }
+  }
+
+  static String _mb(int bytes) => (bytes / (1024 * 1024)).toStringAsFixed(1);
+
+  Future<void> _pickAndUpload() async {
+    final account = _account;
+    if (account == null) return;
+    final picked = await FilePicker.platform.pickFiles();
+    final path = picked?.files.single.path;
+    if (path == null) return; // 選ばずに戻った
+    final file = File(path);
+    final originalName = path.split('/').last;
+    final fixedName = fixMojibakeName(originalName);
+    setState(() {
+      _uploading = true;
+      _uploadText = null;
+      _sentBytes = 0;
+      _totalBytes = 0;
+    });
+    final uploader = ResumableUploader(await account.authHeaders);
+    try {
+      await uploader.upload(file, fixedName, onProgress: (sent, total) {
+        if (!mounted) return;
+        setState(() {
+          _sentBytes = sent;
+          _totalBytes = total;
+        });
+      });
+      if (!mounted) return;
+      setState(() {
+        _uploading = false;
+        _uploadText = 'ドライブに「$fixedName」を入れました';
+        _uploadError = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _uploading = false;
+        _uploadText = '送信できませんでした：$e';
+        _uploadError = true;
+      });
+    } finally {
+      uploader.close();
     }
   }
 
@@ -174,12 +231,34 @@ class _HomePageState extends State<HomePage> {
                         Text('処理中…', style: TextStyle(color: kSub)),
                       ],
                     )
-                  else if (account != null)
+                  else if (account != null) ...[
+                    if (_uploading) ...[
+                      LinearProgressIndicator(
+                        value: _totalBytes > 0 ? _sentBytes / _totalBytes : null,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '送信中… ${_mb(_sentBytes)} / ${_mb(_totalBytes)} MB',
+                        style: const TextStyle(color: kInk),
+                      ),
+                    ] else
+                      ElevatedButton(
+                        onPressed: _pickAndUpload,
+                        child: const Text('テスト送信（ファイルを選ぶ）'),
+                      ),
+                    if (_uploadText != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _uploadText!,
+                        style: TextStyle(color: _uploadError ? const Color(0xFFC62828) : kInk),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
                     OutlinedButton(
                       onPressed: _signOut,
                       child: const Text('ログアウト'),
-                    )
-                  else
+                    ),
+                  ] else
                     ElevatedButton(
                       onPressed: _signIn,
                       child: const Text('Googleにログイン'),
