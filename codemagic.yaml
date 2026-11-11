@@ -175,10 +175,22 @@ workflows:
                                   result.success(null)
                               }
                               "openMuse" -> {
+                                  var opened = false
                                   try {
-                                      startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://muse.ai")))
+                                      val launch = packageManager.getLaunchIntentForPackage("com.facebook.aura")
+                                      if (launch != null) {
+                                          startActivity(launch)
+                                          opened = true
+                                      }
                                   } catch (e: Exception) {
-                                      // 開けない環境では何もしない
+                                      // Muse アプリが無い等。Play ストアへ誘導する。
+                                  }
+                                  if (!opened) {
+                                      try {
+                                          startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.facebook.aura")))
+                                      } catch (e: Exception) {
+                                          // 開けない環境では何もしない
+                                      }
                                   }
                                   result.success(null)
                               }

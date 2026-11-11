@@ -47,7 +47,8 @@ class StorageBridge {
     }
   }
 
-  /// ミューズ(muse.ai)を開く。アプリが入っていればアプリ側に渡る。
+  /// Muse アプリを直接起動する(Web版は年齢確認が出るため経由しない)。
+  /// アプリが無い場合は Play ストアの Muse ページを開く。
   static Future<void> openMuse() async {
     try {
       await _channel.invokeMethod<void>('openMuse');
